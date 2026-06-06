@@ -1,0 +1,11 @@
+{
+  "name": "@aprenda-politica/photo-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@aprenda-politica/shared": "*",
+    "fflate": "^0.8.3",
+    "dotenv": "^16.0.0"
+  }
+}
