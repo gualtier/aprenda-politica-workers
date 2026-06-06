@@ -1,0 +1,51 @@
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  sync-worker:
+    build:
+      context: .
+      dockerfile: packages/sync-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  photo-worker:
+    build:
+      context: .
+      dockerfile: packages/photo-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  news-worker:
+    build:
+      context: .
+      dockerfile: packages/news-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: packages/scheduler/Dockerfile
+    ports:
+      - '127.0.0.1:3001:3001'
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
