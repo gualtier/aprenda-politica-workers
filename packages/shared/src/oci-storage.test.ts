@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { getPhotoUrl } from './oci-storage.js'
 
 beforeEach(() => {
   process.env.PHOTOS_BASE_URL = 'https://fotos.aprendapolitica.com.br'
+})
+
+afterEach(() => {
+  delete process.env.PHOTOS_BASE_URL
 })
 
 describe('getPhotoUrl', () => {

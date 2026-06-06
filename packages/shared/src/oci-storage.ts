@@ -46,7 +46,10 @@ export async function photoExists(uf: string, sqCandidato: string): Promise<bool
       Key: `${uf.toLowerCase()}/${sqCandidato}.jpg`,
     }))
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 404) {
+      return false
+    }
+    throw error
   }
 }
