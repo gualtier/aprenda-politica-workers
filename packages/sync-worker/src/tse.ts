@@ -80,7 +80,8 @@ async function resolveParties(supabase: SupabaseClient, rows: Record<string, str
 async function resolveMunicipalities(supabase: SupabaseClient, stateId: number): Promise<Map<string, number>> {
   const { data } = await supabase.from('municipalities').select('id, name').eq('state_id', stateId)
   const map = new Map<string, number>()
-  for (const m of data ?? []) map.set(m.name.toUpperCase(), m.id)
+  // Indexa por slug (sem acento/caixa) — TSE manda NM_UE sem acento, IBGE com acento.
+  for (const m of data ?? []) map.set(slugify(m.name), m.id)
   return map
 }
 
@@ -145,7 +146,7 @@ export async function syncTSEState(
       party_id: partyMap.get(row['SG_PARTIDO']?.trim()) ?? null,
       position_id: positionId,
       state_id: state.id,
-      municipality_id: isMunicipal ? (munMap.get(row['NM_UE']?.trim().toUpperCase()) ?? null) : null,
+      municipality_id: isMunicipal ? (munMap.get(slugify(row['NM_UE']?.trim() ?? '')) ?? null) : null,
       external_id: sqCandidato,
       source: 'tse',
       mandate_start: mandate.start,
