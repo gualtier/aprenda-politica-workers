@@ -29,14 +29,25 @@ export async function uploadPhoto(
   imageBuffer: Uint8Array
 ): Promise<string> {
   const key = `${uf.toLowerCase()}/${sqCandidato}.jpg`
-  await getClient().send(new PutObjectCommand({
+  const cmd = new PutObjectCommand({
     Bucket: BUCKET(),
     Key: key,
     Body: imageBuffer,
     ContentType: 'image/jpeg',
     ACL: 'public-read',
-  }))
-  return getPhotoUrl(uf, sqCandidato)
+  })
+  // Retry com backoff — OCI pode dar erro transitório (propagação de chave nova, throttling)
+  let lastErr: unknown
+  for (let i = 0; i < 4; i++) {
+    try {
+      await getClient().send(cmd)
+      return getPhotoUrl(uf, sqCandidato)
+    } catch (e) {
+      lastErr = e
+      await new Promise(r => setTimeout(r, 500 * 2 ** i)) // 0.5s,1s,2s,4s
+    }
+  }
+  throw lastErr
 }
 
 export async function photoExists(uf: string, sqCandidato: string): Promise<boolean> {

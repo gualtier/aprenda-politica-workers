@@ -3,7 +3,8 @@ import { uploadPhoto, photoExists } from '@aprenda-politica/shared'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 function photoZipUrl(year: 2022 | 2024, uf: string): string {
-  return `https://cdn.tse.jus.br/estatistica/sead/odsele/foto_cand/foto_cand${year}_${uf}_div.zip`
+  // TSE moveu as fotos para /eleicoes/eleicoes{ano}/fotos/ (antes era /odsele/foto_cand/)
+  return `https://cdn.tse.jus.br/estatistica/sead/eleicoes/eleicoes${year}/fotos/foto_cand${year}_${uf}_div.zip`
 }
 
 export async function processPhotosForState(
