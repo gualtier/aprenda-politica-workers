@@ -1,0 +1,15 @@
+name: diag-rede
+on: { workflow_dispatch: {} }
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: testar fontes BR
+        run: |
+          echo "IP de saída do runner:"; curl -s --max-time 15 https://api.ipify.org; echo
+          for h in https://cdn.tse.jus.br/ https://dadosabertos.camara.leg.br/api/v2/referencias/deputados/siglaUF https://legis.senado.leg.br/; do
+            echo "== $h =="
+            curl -sS -o /dev/null -w "  curl: HTTP %{http_code} ip=%{remote_ip} t=%{time_total}s\n" --max-time 25 "$h" || echo "  curl FALHOU"
+          done
+          echo "== node fetch TSE =="
+          node -e "fetch('https://cdn.tse.jus.br/',{signal:AbortSignal.timeout(20000)}).then(r=>console.log('  node:',r.status)).catch(e=>console.log('  node FALHOU:',e.cause?.code||e.message))"
