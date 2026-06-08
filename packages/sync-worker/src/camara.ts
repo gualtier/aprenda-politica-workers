@@ -4,6 +4,27 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const CAMARA_API = 'https://dadosabertos.camara.leg.br/api/v2'
 const CURRENT_LEGISLATURE = 57
 
+/** Fetch com retry + backoff exponencial — a API da Câmara dá 504/timeout com frequência. */
+async function fetchCamara(url: string, attempts = 5): Promise<Response> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 30_000)
+      const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+      clearTimeout(t)
+      if (res.ok) return res
+      // 5xx/429 são transitórios → retry; 4xx (exceto 429) é definitivo
+      if (res.status < 500 && res.status !== 429) throw new Error(`Camara API error: ${res.status}`)
+      lastErr = new Error(`Camara API error: ${res.status}`)
+    } catch (e) {
+      lastErr = e
+    }
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, 1000 * 2 ** i)) // 1s,2s,4s,8s
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Camara API: falha após retries')
+}
+
 export function parseCamaraDeputado(
   raw: { id: number; nome: string; siglaPartido: string; siglaUf: string; urlFoto: string },
   positionId: number,
@@ -48,8 +69,7 @@ export async function syncDeputadosFederais(supabase: SupabaseClient, stateAbbr:
 
   while (true) {
     const url = `${CAMARA_API}/deputados?idLegislatura=${CURRENT_LEGISLATURE}&siglaUf=${stateAbbr}&itens=100&pagina=${page}&ordem=ASC&ordenarPor=nome`
-    const res = await fetch(url, { headers: { Accept: 'application/json' } })
-    if (!res.ok) throw new Error(`Camara API error: ${res.status}`)
+    const res = await fetchCamara(url)
     const { dados } = await res.json()
     if (!dados || dados.length === 0) break
 
