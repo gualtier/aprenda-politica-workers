@@ -103,14 +103,21 @@ export async function syncTSEState(
     const zipBuf = await getZip(year as 2022 | 2024)
     const files = unzipSync(zipBuf)
     const csvName = Object.keys(files).find(n => n.includes(`_${uf}.csv`))
-    if (!csvName) throw new Error(`CSV for ${uf} not found in ${year} ZIP`)
+    // Algumas UFs não têm CSV em todo ano (ex: DF não tem eleição municipal em 2024).
+    // Nesse caso pulamos o ano em vez de quebrar a UF inteira.
+    if (!csvName) {
+      console.warn(`[tse] ${uf}: sem CSV em ${year} (esperado p/ DF na eleição municipal)`)
+      continue
+    }
     rowsByYear[year] = parseCSV(files[csvName])
   }
 
   const allElected: Record<string, string>[] = []
   for (const cargo of cargos) {
     const year = (cargo === 'PREFEITO' || cargo === 'VEREADOR') ? 2024 : 2022
-    const elected = rowsByYear[year].filter(r =>
+    const rows = rowsByYear[year]
+    if (!rows) continue
+    const elected = rows.filter(r =>
       r['DS_CARGO'] === cargo && r['DS_SIT_TOT_TURNO']?.startsWith('ELEITO')
     )
     console.log(`[tse] ${uf} ${cargo}: ${elected.length} eleitos`)
