@@ -4,12 +4,12 @@ jobs:
   diag:
     runs-on: ubuntu-latest
     steps:
-      - name: testar fontes BR
+      - name: baixar ZIP real do TSE
         run: |
-          echo "IP de saída do runner:"; curl -s --max-time 15 https://api.ipify.org; echo
-          for h in https://cdn.tse.jus.br/ https://dadosabertos.camara.leg.br/api/v2/referencias/deputados/siglaUF https://legis.senado.leg.br/; do
-            echo "== $h =="
-            curl -sS -o /dev/null -w "  curl: HTTP %{http_code} ip=%{remote_ip} t=%{time_total}s\n" --max-time 25 "$h" || echo "  curl FALHOU"
-          done
-          echo "== node fetch TSE =="
-          node -e "fetch('https://cdn.tse.jus.br/',{signal:AbortSignal.timeout(20000)}).then(r=>console.log('  node:',r.status)).catch(e=>console.log('  node FALHOU:',e.cause?.code||e.message))"
+          echo "RAM disponível:"; free -h | head -2
+          URL=https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_2022.zip
+          echo "== curl (stream p/ disco) =="
+          curl -sS -o /tmp/t.zip -w "  HTTP %{http_code} size=%{size_download} t=%{time_total}s\n" --max-time 180 "$URL" || echo "  curl FALHOU"
+          ls -lh /tmp/t.zip 2>/dev/null
+          echo "== node fetch + arrayBuffer =="
+          node -e "const u='$URL'; fetch(u).then(r=>r.arrayBuffer()).then(b=>console.log('  node OK bytes=',b.byteLength)).catch(e=>console.log('  node FALHOU:', e.message, '| cause:', e.cause?.code||e.cause?.message||e.cause))"
