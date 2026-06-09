@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { buildSlug, dedupeAuthors, slugify, SUBSTANTIVE_TYPES } from './normalize.mjs'
+import { classifyTopics } from './topics.mjs'
 
 const env = Object.fromEntries(readFileSync('.env', 'utf8').split('\n')
   .filter(l => l && !l.startsWith('#') && l.includes('='))
@@ -65,7 +66,9 @@ export async function ingest(adapter, { sinceYear = 2023 } = {}) {
         number: p.number ?? null, year: p.year ?? null,
         title: p.title ?? null, summary: p.summary ?? null,
         presented_on: p.presentedOn ?? null, status: p.status ?? null,
-        themes: p.themes ?? [], url: p.url ?? null,
+        themes: p.themes ?? [],
+        topics: classifyTopics(p.title, p.summary, p.themes ?? []),
+        url: p.url ?? null,
         party_ids: partyIds, slug, updated_at: new Date().toISOString(),
       }
       const { data: up, error: upErr } = await supabase
