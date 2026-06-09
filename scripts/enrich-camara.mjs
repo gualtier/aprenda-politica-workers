@@ -59,7 +59,7 @@ function buildBio(d) {
 async function main() {
   const { data: pos } = await supabase.from('positions').select('id').eq('slug', 'deputado-federal').single()
   let q = supabase.from('politicians').select('id, external_id, name, bio').eq('position_id', pos.id).not('external_id', 'is', null)
-  if (!ALL) q = q.is('bio', null)
+  if (!ALL) q = q.is('birth_date', null)
   const { data: deps } = await q
   console.log(`[camara] ${deps?.length ?? 0} deputados a enriquecer (${ALL ? 'todos' : 'sem bio'})`)
 
@@ -68,11 +68,19 @@ async function main() {
     try {
       const d = await fetchDeputado(dep.external_id)
       if (!d) { skip++; continue }
-      const bio = buildBio(d)
+      const us = d.ultimoStatus || {}
+      const patch = {}
+      const bio = buildBio(d); if (bio) patch.bio = bio
       const social = (d.redeSocial || []).filter(Boolean).map(url => ({ platform: platformOf(url), url }))
-      const patch = { bio: bio || null }
       if (social.length) patch.social_links = social
-      await supabase.from('politicians').update(patch).eq('id', dep.id)
+      // campos estruturados
+      if (d.dataNascimento && !Number.isNaN(Date.parse(d.dataNascimento))) patch.birth_date = d.dataNascimento
+      if (d.sexo === 'M' || d.sexo === 'F') patch.gender = d.sexo
+      if (d.escolaridade) patch.education = d.escolaridade
+      if (/^[A-Z]{2}$/.test(d.ufNascimento || '')) patch.birth_state = d.ufNascimento
+      const email = (us.email || '').trim().toLowerCase()
+      if (email.includes('@')) patch.email = email
+      if (Object.keys(patch).length) await supabase.from('politicians').update(patch).eq('id', dep.id)
       ok++
       if (ok % 50 === 0) console.log(`  ...${ok} ok`)
     } catch (e) {

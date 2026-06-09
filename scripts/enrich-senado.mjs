@@ -46,7 +46,7 @@ function buildBio(p) {
 async function main() {
   const { data: pos } = await supabase.from('positions').select('id').eq('slug', 'senador').single()
   let q = supabase.from('politicians').select('id, external_id, name, bio').eq('position_id', pos.id).not('external_id', 'is', null)
-  if (!ALL) q = q.is('bio', null)
+  if (!ALL) q = q.is('birth_date', null)
   const { data: sens } = await q
   console.log(`[senado] ${sens?.length ?? 0} senadores a enriquecer (${ALL ? 'todos' : 'sem bio'})`)
 
@@ -55,12 +55,20 @@ async function main() {
     try {
       const p = await fetchSenador(sen.external_id)
       if (!p) { skip++; continue }
-      const bio = buildBio(p)
-      const site = p.IdentificacaoParlamentar?.UrlPaginaParticular
-      const social = site && /^https?:\/\//.test(site) ? [{ platform: 'Site', url: site }] : undefined
-      const patch = { bio: bio || null }
-      if (social) patch.social_links = social
-      await supabase.from('politicians').update(patch).eq('id', sen.id)
+      const ip = p.IdentificacaoParlamentar || {}, db = p.DadosBasicosParlamentar || {}
+      const patch = {}
+      const bio = buildBio(p); if (bio) patch.bio = bio
+      const site = ip.UrlPaginaParticular
+      if (site && /^https?:\/\//.test(site)) patch.social_links = [{ platform: 'Site', url: site }]
+      // campos estruturados
+      if (db.DataNascimento && !Number.isNaN(Date.parse(db.DataNascimento))) patch.birth_date = db.DataNascimento
+      const sx = ip.SexoParlamentar || ''
+      if (/^m/i.test(sx)) patch.gender = 'M'
+      else if (/^f/i.test(sx)) patch.gender = 'F'
+      if (/^[A-Z]{2}$/.test((db.UfNaturalidade || '').toUpperCase())) patch.birth_state = db.UfNaturalidade.toUpperCase()
+      const email = (ip.EmailParlamentar || '').trim().toLowerCase()
+      if (email.includes('@')) patch.email = email
+      if (Object.keys(patch).length) await supabase.from('politicians').update(patch).eq('id', sen.id)
       ok++
     } catch (e) {
       fail++

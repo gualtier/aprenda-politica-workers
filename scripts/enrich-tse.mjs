@@ -22,6 +22,8 @@ const CACHE_2024 = '/tmp/tse_cand_2024.zip'
 const titleCase = s => (s || '').toLowerCase().replace(/(^|\s|'|\/|-)\p{L}/gu, c => c.toUpperCase())
 const SKIP_OCC = new Set(['', 'OUTROS', 'NÃO INFORMADO', 'NAO INFORMADO'])
 const SKIP_INSTR = new Set(['', 'NÃO INFORMADO', 'NAO INFORMADO'])
+const NA = new Set(['', 'NÃO INFORMADO', 'NAO INFORMADO', '#NULO#', '#NE#', 'NÃO DIVULGÁVEL'])
+const cleanLabel = s => { const t = (s || '').trim(); return NA.has(t.toUpperCase()) ? null : titleCase(t) }
 
 async function loadZip(cache, url, minBytes) {
   if (existsSync(cache) && statSync(cache).size >= minBytes) {
@@ -46,45 +48,60 @@ function harvest(csvBuf, wanted, out) {
   const H = split(lines[0])
   const idx = name => H.indexOf(name)
   const iSQ = idx('SQ_CANDIDATO'), iOcc = idx('DS_OCUPACAO'), iInstr = idx('DS_GRAU_INSTRUCAO')
-  const iNasc = idx('DT_NASCIMENTO'), iGen = idx('DS_GENERO')
+  const iNasc = idx('DT_NASCIMENTO'), iGen = idx('DS_GENERO'), iRace = idx('DS_COR_RACA')
+  const iMar = idx('DS_ESTADO_CIVIL'), iUf = idx('SG_UF_NASCIMENTO'), iMail = idx('DS_EMAIL')
   if (iSQ < 0) return
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue
     const v = split(lines[i])
     const sq = v[iSQ]
     if (!sq || !wanted.has(sq) || out.has(sq)) continue
-    out.set(sq, { occ: v[iOcc] || '', instr: v[iInstr] || '', nasc: v[iNasc] || '', gen: v[iGen] || '' })
+    out.set(sq, {
+      occ: v[iOcc] || '', instr: v[iInstr] || '', nasc: v[iNasc] || '', gen: v[iGen] || '',
+      race: v[iRace] || '', marital: v[iMar] || '', uf: v[iUf] || '', email: v[iMail] || '',
+    })
   }
 }
 
 function buildPatch(d) {
   const fem = d.gen === 'FEMININO'
-  const occRaw = (d.occ || '').toUpperCase()
-  const occupation = SKIP_OCC.has(occRaw) ? null : titleCase(d.occ)
+  const occupation = SKIP_OCC.has((d.occ || '').toUpperCase()) ? null : titleCase(d.occ)
+  const education = SKIP_INSTR.has((d.instr || '').toUpperCase()) ? null : titleCase(d.instr)
+  const gender = d.gen === 'MASCULINO' ? 'M' : d.gen === 'FEMININO' ? 'F' : null
+  const race = cleanLabel(d.race)
+  const marital_status = cleanLabel(d.marital)
+  const birth_state = /^[A-Z]{2}$/.test((d.uf || '').toUpperCase()) ? d.uf.toUpperCase() : null
+  const em = (d.email || '').trim().toLowerCase()
+  const email = em.includes('@') && !NA.has(em.toUpperCase()) ? em : null
+
+  // birth_date: dd/mm/yyyy -> yyyy-mm-dd
+  let birth_date = null, year = null
+  const m = (d.nasc || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (m) { const iso = `${m[3]}-${m[2]}-${m[1]}`; if (!Number.isNaN(Date.parse(iso))) { birth_date = iso; year = m[3] } }
+
+  // bio para exibição, gerada dos campos estruturados
   const parts = []
   if (occupation) parts.push(`Profissão declarada: ${occupation}.`)
-  const instrRaw = (d.instr || '').toUpperCase()
-  if (!SKIP_INSTR.has(instrRaw)) parts.push(`Escolaridade: ${titleCase(d.instr)}.`)
-  const year = d.nasc?.split('/')?.[2]
-  if (year && /^\d{4}$/.test(year)) {
+  if (education) parts.push(`Escolaridade: ${education}.`)
+  if (year) {
     const age = new Date().getFullYear() - Number(year)
     parts.push(`${fem ? 'Nascida' : 'Nascido'} em ${year}${age > 0 && age < 120 ? ` (${age} anos)` : ''}.`)
   }
   const bio = parts.join(' ') || null
-  if (!bio && !occupation) return null
-  const patch = {}
-  if (bio) patch.bio = bio
-  if (occupation) patch.occupation = occupation
+
+  const patch = { occupation, education, gender, race, marital_status, birth_state, email, birth_date, bio }
+  for (const k of Object.keys(patch)) if (patch[k] == null) delete patch[k] // não sobrescreve com null
   return Object.keys(patch).length ? patch : null
 }
 
 async function fetchTargets() {
-  // políticos SEM bio (pula federais já enriquecidos), com external_id
-  const map = new Map() // external_id -> politician id
+  // estaduais/municipais (source=tse) ainda sem dados estruturados.
+  // Federais (source camara/senado) têm external_id ≠ SQ — tratados nos outros scripts.
+  const map = new Map() // external_id (=SQ_CANDIDATO) -> politician id
   let from = 0
   for (;;) {
     const { data, error } = await supabase.from('politicians')
-      .select('id, external_id').is('bio', null).not('external_id', 'is', null)
+      .select('id, external_id').eq('source', 'tse').is('birth_date', null).not('external_id', 'is', null)
       .order('id').range(from, from + 999)
     if (error) throw error
     if (!data?.length) break
