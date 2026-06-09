@@ -1,3 +1,4 @@
 import { camaraAdapter } from './adapters/camara.mjs'
-// senado e ales entram nas tasks seguintes
-export const registry = { camara: camaraAdapter }
+import { senadoAdapter } from './adapters/senado.mjs'
+// ales entra nas tasks seguintes
+export const registry = { camara: camaraAdapter, senado: senadoAdapter }
