@@ -24,3 +24,8 @@ export function dedupeAuthors(authors) {
   }
   return [...byName.values()]
 }
+
+// Tipos substantivos de interesse cidadão (exclui lixo procedural: REQ, RIC, EMC, PRL, RPD, DOC...).
+export const SUBSTANTIVE_TYPES = new Set([
+  'PL', 'PLP', 'PEC', 'PDL', 'PLV', 'MPV', 'PRC', 'PRS', 'PLN', 'PLC', 'PDS', 'PLS',
+])

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
-import { buildSlug, dedupeAuthors, slugify } from './normalize.mjs'
+import { buildSlug, dedupeAuthors, slugify, SUBSTANTIVE_TYPES } from './normalize.mjs'
 
 const env = Object.fromEntries(readFileSync('.env', 'utf8').split('\n')
   .filter(l => l && !l.startsWith('#') && l.includes('='))
@@ -50,6 +50,7 @@ export async function ingest(adapter, { sinceYear = 2023 } = {}) {
   const idx = await loadMatchIndex()
   let ok = 0, fail = 0
   for await (const p of adapter.fetchPropositions({ sinceYear })) {
+    if (p.type && !SUBSTANTIVE_TYPES.has(p.type)) continue // pula lixo procedural
     try {
       const authors = dedupeAuthors((p.authors || []).map(a => ({
         author_name: a.name, author_external_id: a.externalId ?? null,
