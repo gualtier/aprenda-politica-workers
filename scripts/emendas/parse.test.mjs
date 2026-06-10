@@ -14,6 +14,9 @@ test('parseLocalidade separa município e UF', () => {
   assert.deepEqual(parseLocalidade('PR'), { municipio: null, uf: 'PR' })
   assert.deepEqual(parseLocalidade('NACIONAL'), { municipio: null, uf: null })
   assert.deepEqual(parseLocalidade(''), { municipio: null, uf: null })
+  assert.deepEqual(parseLocalidade('SÃO PAULO (UF)'), { municipio: null, uf: 'SP' })
+  assert.deepEqual(parseLocalidade('MINAS GERAIS (UF)'), { municipio: null, uf: 'MG' })
+  assert.deepEqual(parseLocalidade('DISTRITO FEDERAL (UF)'), { municipio: null, uf: 'DF' })
 })
 
 test('tipoGrupo classifica o tipoEmenda', () => {
