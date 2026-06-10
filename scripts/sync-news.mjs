@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { parseRss, slugify, urlHash, extractCodes } from './news/parse.mjs'
 import { summarize } from './news/summarize.mjs'
+import { resolveOgImage } from './news/ogimage.mjs'
 import { buildSeed } from './news/seed.mjs'
 
 const env = Object.fromEntries(readFileSync('.env', 'utf8').split('\n')
@@ -68,10 +69,11 @@ async function main() {
       let newsId = ex?.[0]?.id
       if (!newsId) {
         const summary = await summarize(it.title, it.snippet)
+        const og = await resolveOgImage(it.link)   // link real do veículo + foto (best-effort)
         const slug = `${slugify(it.title)}-${url_hash.slice(0, 6)}`
         const row = {
-          slug, title: it.title, summary,
-          source_name: it.sourceName, source_domain: it.sourceDomain, source_url: it.link, url_hash,
+          slug, title: it.title, summary, image_url: og.image,
+          source_name: it.sourceName, source_domain: it.sourceDomain, source_url: og.url || it.link, url_hash,
           published_at: it.publishedAt ? it.publishedAt.toISOString() : null,
           category: s.category, sphere: s.sphere,
           topics: s.topicSlug ? [s.topicSlug] : [],
