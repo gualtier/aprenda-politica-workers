@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { parseRss, slugify, urlHash, extractCodes } from './news/parse.mjs'
-import { summarize } from './news/summarize.mjs'
 import { resolveOgImage } from './news/ogimage.mjs'
 import { buildSeed } from './news/seed.mjs'
 
@@ -68,8 +67,8 @@ async function main() {
       const { data: ex } = await supabase.from('news').select('id').eq('url_hash', url_hash).limit(1)
       let newsId = ex?.[0]?.id
       if (!newsId) {
-        const summary = await summarize(it.title, it.snippet)
-        const og = await resolveOgImage(it.link)   // link real do veículo + foto (best-effort)
+        const og = await resolveOgImage(it.link)   // veículo + foto + og:description (best-effort)
+        const summary = og.description ?? null      // resumo = descrição do veículo (sem LLM)
         const slug = `${slugify(it.title)}-${url_hash.slice(0, 6)}`
         const row = {
           slug, title: it.title, summary, image_url: og.image,

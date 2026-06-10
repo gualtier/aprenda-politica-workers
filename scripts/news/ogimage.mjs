@@ -29,6 +29,7 @@ async function decodePublisherUrl(googleNewsUrl) {
 }
 
 const OG_RE = /<meta[^>]+property="og:image"[^>]+content="([^"]+)"|<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i
+const DESC_RE = /<meta[^>]+property="og:description"[^>]+content="([^"]*)"|<meta[^>]+content="([^"]*)"[^>]+property="og:description"|<meta[^>]+name="description"[^>]+content="([^"]*)"/i
 
 // Decodifica entidades HTML na URL (ex.: &amp; -> &), senão os params (auth/width) quebram a imagem.
 const decodeEntities = (s) => (s || '')
@@ -41,12 +42,18 @@ const decodeEntities = (s) => (s || '')
 export async function resolveOgImage(googleNewsUrl) {
   try {
     const pub = await decodePublisherUrl(googleNewsUrl)
-    if (!pub) return { url: null, image: null }
+    if (!pub) return { url: null, image: null, description: null }
     const html = await getText(pub, { timeout: 9000 })
     const m = html.match(OG_RE)
     const image = m ? decodeEntities(m[1] || m[2]) : null
-    return { url: pub, image: image && /^https?:\/\//.test(image) ? image : null }
+    const dm = html.match(DESC_RE)
+    const descRaw = dm ? decodeEntities(dm[1] || dm[2] || dm[3] || '').trim() : ''
+    return {
+      url: pub,
+      image: image && /^https?:\/\//.test(image) ? image : null,
+      description: descRaw.length >= 30 ? descRaw.slice(0, 400) : null,
+    }
   } catch {
-    return { url: null, image: null }
+    return { url: null, image: null, description: null }
   }
 }
