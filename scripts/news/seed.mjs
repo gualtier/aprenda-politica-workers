@@ -20,7 +20,7 @@ const CARGO_TERM = {
   'deputado-federal': 'deputado federal', 'deputado-estadual': 'deputado estadual',
 }
 const CARGO_CAT = {
-  'presidente': ['governo', 'estadual'], 'governador': ['governo', 'estadual'],
+  'presidente': ['governo', 'federal'], 'governador': ['governo', 'estadual'],
   'senador': ['senado', 'federal'], 'deputado-federal': ['camara', 'federal'],
   'deputado-estadual': ['governo', 'estadual'],
 }

@@ -45,10 +45,10 @@ async function matchCode(code) {
     const { data } = await supabase.from('emendas').select('id').eq('numero', em[1]).eq('ano', Number(em[2])).limit(1)
     return data?.[0] ? { emenda_id: data[0].id, label: code } : null
   }
-  const m = code.match(/^(\w+)\s+(\d+)\/(\d{4})$/)
+  const m = code.match(/^(\S+)\s+([\d.]+)\/(\d{4})$/)
   if (m) {
     const { data } = await supabase.from('propositions').select('id')
-      .ilike('type', m[1]).eq('number', Number(m[2])).eq('year', Number(m[3])).limit(1)
+      .ilike('type', m[1]).eq('number', Number(m[2].replace(/\./g, ''))).eq('year', Number(m[3])).limit(1)
     return data?.[0] ? { proposition_id: data[0].id, label: code } : null
   }
   return null
@@ -95,8 +95,8 @@ async function main() {
       }
       if (ents.length) {
         await supabase.from('news_entities').delete().eq('news_id', newsId)
-        await supabase.from('news_entities').insert(ents)
-        linked += ents.length
+        const { error } = await supabase.from('news_entities').insert(ents)
+        if (!error) linked += ents.length
       }
     }
     await new Promise(r => setTimeout(r, 120))
