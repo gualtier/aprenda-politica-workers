@@ -30,6 +30,11 @@ async function decodePublisherUrl(googleNewsUrl) {
 
 const OG_RE = /<meta[^>]+property="og:image"[^>]+content="([^"]+)"|<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i
 
+// Decodifica entidades HTML na URL (ex.: &amp; -> &), senão os params (auth/width) quebram a imagem.
+const decodeEntities = (s) => (s || '')
+  .replace(/&amp;/g, '&').replace(/&#0*38;/g, '&').replace(/&#x0*26;/gi, '&')
+  .replace(/&quot;/g, '"').replace(/&#0*39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+
 /**
  * @returns {Promise<{url: string|null, image: string|null}>} url = link real do veículo, image = og:image
  */
@@ -39,7 +44,7 @@ export async function resolveOgImage(googleNewsUrl) {
     if (!pub) return { url: null, image: null }
     const html = await getText(pub, { timeout: 9000 })
     const m = html.match(OG_RE)
-    const image = m ? (m[1] || m[2]) : null
+    const image = m ? decodeEntities(m[1] || m[2]) : null
     return { url: pub, image: image && /^https?:\/\//.test(image) ? image : null }
   } catch {
     return { url: null, image: null }
