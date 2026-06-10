@@ -1,8 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk'
 
-const client = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null
+// Client lazy: lê ANTHROPIC_API_KEY no 1º uso (o .env é carregado depois dos imports).
+let _client
+function getClient() {
+  if (_client === undefined) {
+    _client = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null
+  }
+  return _client
+}
 
 const cleanFallback = (title, snippet) => {
   const s = (snippet || '').trim()
@@ -15,6 +20,7 @@ const cleanFallback = (title, snippet) => {
  * Falha de API/sem chave -> fallback pro snippet limpo (degradação graciosa).
  */
 export async function summarize(title, snippet) {
+  const client = getClient()
   if (!client) return cleanFallback(title, snippet)
   try {
     const msg = await client.messages.create({
