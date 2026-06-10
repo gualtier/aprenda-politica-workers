@@ -79,13 +79,17 @@ jobs:
           echo "$OUT" | tail -8
           if [ $CODE -eq 0 ]; then
             echo "result=success" >> "$GITHUB_OUTPUT"
-          elif echo "$OUT" | grep -qiE "Out of host capacity|OutOfCapacity|out of capacity"; then
-            echo "Sem capacidade agora — o próximo cron tenta de novo."
-            echo "result=nocapacity" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Falha inesperada no launch (não é capacidade) — ver log acima"
+          elif echo "$OUT" | grep -qiE "NotAuthorized|Authorization failed|not authorized|LimitExceeded|QuotaExceeded|exceeded.*service limit|InvalidParameter|CannotParseRequest|NotFound"; then
+            # erro PERSISTENTE (auth/quota/config) — vale alertar (vermelho)
+            echo "::error::Erro persistente de auth/quota/config no launch — precisa de ação"
+            echo "$OUT" | tail -10
             echo "result=error" >> "$GITHUB_OUTPUT"
             exit 1
+          else
+            # capacidade / transitório / qualquer outro -> tenta no próximo cron (verde, sem spam de falha)
+            echo "Launch não conseguiu (capacidade ou transitório) — o próximo cron tenta de novo:"
+            echo "$OUT" | tail -6
+            echo "result=retry" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Pegar IP público
