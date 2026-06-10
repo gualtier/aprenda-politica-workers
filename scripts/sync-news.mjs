@@ -55,9 +55,10 @@ async function matchCode(code) {
 }
 
 async function main() {
-  const seed = await buildSeed(supabase)
+  const all = await buildSeed(supabase)
+  const seed = process.env.NEWS_SEED_LIMIT ? all.slice(0, Number(process.env.NEWS_SEED_LIMIT)) : all
   const idx = await loadMentionIndex()
-  console.log(`[news] semente: ${seed.length} entidades · índice menção: ${idx.polByName.size} federais`)
+  console.log(`[news] semente: ${seed.length}/${all.length} entidades · índice menção: ${idx.polByName.size} federais`)
   let inserted = 0, linked = 0
   for (const s of seed) {
     const items = (await rss(s.query)).slice(0, PER_QUERY)
