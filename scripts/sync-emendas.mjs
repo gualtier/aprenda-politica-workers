@@ -9,7 +9,8 @@ const env = Object.fromEntries(readFileSync('.env', 'utf8').split('\n')
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 const KEY = env.PORTAL_TRANSPARENCIA_KEY
 const API = 'https://api.portaldatransparencia.gov.br/api-de-dados/emendas'
-const YEARS = [2023, 2024, 2025]
+const YEARS = (process.env.EMENDAS_ANOS ?? env.EMENDAS_ANOS ?? '2023,2024,2025')
+  .split(',').map(s => Number(s.trim())).filter(Boolean)
 
 const slugify = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
