@@ -11,6 +11,8 @@ for (const k of ['ANTHROPIC_API_KEY']) if (env[k]) process.env[k] = env[k]
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 
 const PER_QUERY = Number(process.env.NEWS_PER_QUERY ?? 6)
+const DELAY_MS = Number(process.env.NEWS_DELAY_MS ?? 700)   // pausa por matéria nova (gentil com o Google)
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const COVER_BY_CAT = { camara: 'congresso', senado: 'cupula', governo: 'palacio', eleicoes: 'urna', economia: 'grafico', cidades: 'cidade', justica: 'balanca' }
 
 async function rss(query) {
@@ -56,7 +58,9 @@ async function matchCode(code) {
 
 async function main() {
   const all = await buildSeed(supabase)
-  const seed = process.env.NEWS_SEED_LIMIT ? all.slice(0, Number(process.env.NEWS_SEED_LIMIT)) : all
+  const off = Number(process.env.NEWS_SEED_OFFSET ?? 0)   // lote: início
+  const lim = process.env.NEWS_SEED_LIMIT ? Number(process.env.NEWS_SEED_LIMIT) : all.length
+  const seed = all.slice(off, off + lim)
   const idx = await loadMentionIndex()
   console.log(`[news] semente: ${seed.length}/${all.length} entidades · índice menção: ${idx.polByName.size} federais`)
   let inserted = 0, linked = 0
@@ -81,6 +85,7 @@ async function main() {
         const { data: ins } = await supabase.from('news').insert(row).select('id').single()
         newsId = ins?.id
         if (newsId) inserted++
+        await sleep(DELAY_MS)   // pacing: só após matéria nova (a que bate no Google)
       }
       if (!newsId) continue
       const ents = []
