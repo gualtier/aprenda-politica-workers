@@ -44,9 +44,12 @@ jobs:
       - name: Pular se já existe instância
         id: check
         run: |
-          set -euo pipefail
-          EXISTING=$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json 2>/dev/null \
-            | python3 -c "import sys,json,os; d=json.load(sys.stdin).get('data',[]); print(sum(1 for i in d if i.get('display-name')==os.environ['INSTANCE_NAME'] and i.get('lifecycle-state') not in ('TERMINATED','TERMINATING')))")
+          set -uo pipefail
+          RAW=$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json 2>oci_err.log); RC=$?
+          if [ -s oci_err.log ]; then echo "stderr do oci:"; cat oci_err.log; fi
+          # 0 instâncias -> oci devolve stdout vazio com RC 0 (não é erro). Auth/erro real -> RC!=0.
+          if [ $RC -ne 0 ]; then echo "::error::oci list falhou (auth/config?) — ver stderr acima"; exit 1; fi
+          EXISTING=$(printf '%s' "$RAW" | python3 -c "import sys,json,os; raw=sys.stdin.read().strip(); d=(json.loads(raw).get('data',[]) if raw else []); print(sum(1 for i in d if i.get('display-name')==os.environ['INSTANCE_NAME'] and i.get('lifecycle-state') not in ('TERMINATED','TERMINATING')))")
           echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
           if [ "$EXISTING" != "0" ]; then echo "Já existe '$INSTANCE_NAME' — nada a fazer."; else echo "Nenhuma instância — vou tentar o launch."; fi
 
