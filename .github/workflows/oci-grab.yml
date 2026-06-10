@@ -1,0 +1,119 @@
+name: OCI A1 grab
+
+# Tenta pegar uma instância Always-Free A1.Flex no OCI (sa-saopaulo-1) a cada 15 min.
+# Roda na infra do GitHub (24/7, independente do notebook). Idempotente: só lança se
+# não existir instância com o nome alvo. Abre uma issue quando conseguir.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # GitHub pode atrasar sob carga; ~15 min é o alvo
+  workflow_dispatch:           # permite rodar manualmente
+
+concurrency:
+  group: oci-grab
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+  OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+  OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+  OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+  OCI_CLI_REGION: sa-saopaulo-1
+  SUPPRESS_LABEL_WARNING: 'True'
+  # Parâmetros do launch (descobertos do ambiente — não são segredos)
+  COMPARTMENT: ocid1.tenancy.oc1..aaaaaaaabmlkr4x6k2d3k23yc3mwlprdz3oksnvxepgwzhl756ow34b5lmga
+  AD: 'AqYL:SA-SAOPAULO-1-AD-1'
+  SUBNET: ocid1.subnet.oc1.sa-saopaulo-1.aaaaaaaampvti5vnwmghnyqe7qfe2xahcfwm2lxz6uoenntwd5kd37war7sa
+  IMAGE: ocid1.image.oc1.sa-saopaulo-1.aaaaaaaaemf52b7af7ncncxz6pdc6hrlkdmylvwejfzpwnpbuhlfxwhrno6a
+  SHAPE: VM.Standard.A1.Flex
+  OCPUS: '4'       # Always-Free A1: até 4 OCPU / 24 GB no total
+  MEM_GB: '24'
+  INSTANCE_NAME: aprenda-workers-a1
+
+jobs:
+  grab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar OCI CLI
+        run: pip install --quiet oci-cli
+
+      - name: Pular se já existe instância
+        id: check
+        run: |
+          set -euo pipefail
+          EXISTING=$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json 2>/dev/null \
+            | python3 -c "import sys,json,os; d=json.load(sys.stdin).get('data',[]); print(sum(1 for i in d if i.get('display-name')==os.environ['INSTANCE_NAME'] and i.get('lifecycle-state') not in ('TERMINATED','TERMINATING')))")
+          echo "existing=$EXISTING" >> "$GITHUB_OUTPUT"
+          if [ "$EXISTING" != "0" ]; then echo "Já existe '$INSTANCE_NAME' — nada a fazer."; else echo "Nenhuma instância — vou tentar o launch."; fi
+
+      - name: Tentar launch (A1.Flex)
+        if: steps.check.outputs.existing == '0'
+        id: launch
+        env:
+          SSH_PUBKEY: ${{ secrets.OCI_SSH_PUBKEY }}
+        run: |
+          set +e
+          python3 - <<'PY' > meta.json
+          import json, os
+          print(json.dumps({"ssh_authorized_keys": os.environ["SSH_PUBKEY"]}))
+          PY
+          OUT=$(oci compute instance launch \
+            --compartment-id "$COMPARTMENT" \
+            --availability-domain "$AD" \
+            --shape "$SHAPE" \
+            --shape-config "{\"ocpus\": $OCPUS, \"memoryInGBs\": $MEM_GB}" \
+            --image-id "$IMAGE" \
+            --subnet-id "$SUBNET" \
+            --display-name "$INSTANCE_NAME" \
+            --assign-public-ip true \
+            --metadata file://meta.json \
+            --wait-for-state RUNNING 2>&1)
+          CODE=$?
+          echo "$OUT" | tail -8
+          if [ $CODE -eq 0 ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          elif echo "$OUT" | grep -qiE "Out of host capacity|OutOfCapacity|out of capacity"; then
+            echo "Sem capacidade agora — o próximo cron tenta de novo."
+            echo "result=nocapacity" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Falha inesperada no launch (não é capacidade) — ver log acima"
+            echo "result=error" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Pegar IP público
+        if: steps.launch.outputs.result == 'success'
+        id: ip
+        run: |
+          set -euo pipefail
+          IID=$(oci compute instance list --compartment-id "$COMPARTMENT" --all --output json \
+            | python3 -c "import sys,json,os; d=json.load(sys.stdin)['data']; print(next(i['id'] for i in d if i.get('display-name')==os.environ['INSTANCE_NAME'] and i.get('lifecycle-state')=='RUNNING'))")
+          IP=$(oci compute instance list-vnics --instance-id "$IID" --output json | python3 -c "import sys,json; print(json.load(sys.stdin)['data'][0].get('public-ip',''))")
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "Instância RUNNING — IP público: $IP"
+
+      - name: Abrir issue avisando sucesso
+        if: steps.launch.outputs.result == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: '🎉 Instância OCI A1 conseguida — desative o workflow',
+              body: [
+                'A instância `${{ env.INSTANCE_NAME }}` (A1.Flex ${{ env.OCPUS }} OCPU / ${{ env.MEM_GB }} GB) está **RUNNING**.',
+                '',
+                '**IP público:** `${{ steps.ip.outputs.ip }}`',
+                '',
+                '```bash',
+                'ssh ubuntu@${{ steps.ip.outputs.ip }}',
+                '# depois: bash scripts/setup-oci.sh https://github.com/gualtier/aprenda-politica-workers.git',
+                '```',
+                '',
+                '⚠️ **Desative este workflow** (Actions → OCI A1 grab → ••• → Disable workflow) — já tem instância.'
+              ].join('\n')
+            })
