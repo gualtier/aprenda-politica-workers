@@ -41,7 +41,7 @@ services:
       context: .
       dockerfile: packages/scheduler/Dockerfile
     ports:
-      - '127.0.0.1:3001:3001'
+      - '127.0.0.1:39001:3001'   # host 39001 (porta incomum, evita conflito com outros apps)
     env_file: .env
     depends_on:
       redis:

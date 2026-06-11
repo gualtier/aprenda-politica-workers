@@ -1,4 +1,4 @@
 services:
   redis:
     ports:
-      - '127.0.0.1:6379:6379'
+      - '127.0.0.1:16399:6379'   # host 16399 (porta incomum, evita conflito com outros apps)

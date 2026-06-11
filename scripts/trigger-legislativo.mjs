@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq'
 import IORedis from 'ioredis'
-const connection = new IORedis({ host: '127.0.0.1', port: 6379, maxRetriesPerRequest: null })
+const connection = new IORedis({ host: '127.0.0.1', port: 16399, maxRetriesPerRequest: null })
 const sync = new Queue('sync', { connection })
 const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO']
 for (const uf of UFS) {
