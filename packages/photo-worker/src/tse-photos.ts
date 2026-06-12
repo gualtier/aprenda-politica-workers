@@ -12,13 +12,15 @@ export async function processPhotosForState(
   uf: string,
   year: 2022 | 2024
 ): Promise<number> {
-  const mandateStart = year === 2024 ? '2025-01-01' : '2023-01-01'
+  // Posse varia por cargo dentro da mesma eleição: governador toma posse em 01/01,
+  // deputados/senadores em 01/02. Filtrar só por uma data deixava os legislativos de fora.
+  const mandateStarts = year === 2024 ? ['2025-01-01', '2025-02-01'] : ['2023-01-01', '2023-02-01']
   const { data: politicians } = await supabase
     .from('politicians')
     .select('id, external_id, slug')
     .eq('state_id', (await supabase.from('states').select('id').eq('abbr', uf).single()).data?.id)
     .is('photo_url', null)
-    .eq('mandate_start', mandateStart)
+    .in('mandate_start', mandateStarts)
     .eq('source', 'tse')
 
   if (!politicians || politicians.length === 0) {
